@@ -6,6 +6,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let _ = input;
 
     let q = quote! {
+        use std::error::Error;
         pub struct CommandBuilder {
             executable: Option<String>,
             args: Option<Vec<String>>,
@@ -28,6 +29,19 @@ pub fn derive(input: TokenStream) -> TokenStream {
             pub fn current_dir(&mut self, current_dir: String) -> &mut Self {
                 self.current_dir = Some(current_dir);
                 self
+            }
+            pub fn build(&mut self) -> Result<Command, Box<dyn Error>> {
+                match (self.executable.take(), self.args.take(), self.env.take(), self.current_dir.take()){
+                    (Some(ex),Some(a),Some(ev),Some(cd)) =>Ok(
+                        Command{
+                            executable: ex,
+                            args: a,
+                            env: ev,
+                            current_dir: cd,
+                        }
+                    ),
+                    _ =>  Err("a")?, // 手抜き
+                }
             }
         }
 
