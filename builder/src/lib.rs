@@ -1,18 +1,20 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use std::error::Error;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 #[proc_macro_derive(Builder)]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let input_indent = input.ident;
+    let builder_name = format_ident!("{}Builder", input_indent);
     let f = fields(input.data).unwrap();
     let q = quote! {
         use std::error::Error;
-        pub struct CommandBuilder {
+        pub struct #builder_name {
             #f
         }
-        impl CommandBuilder {
+        impl #builder_name {
             pub fn executable(&mut self, executable: String) -> &mut Self {
                 self.executable = Some(executable);
                 self
