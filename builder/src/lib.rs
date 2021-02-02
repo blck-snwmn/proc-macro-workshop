@@ -8,7 +8,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let input_indent = input.ident;
     let builder_name = format_ident!("{}Builder", input_indent);
-    let f = fields(input.data).unwrap();
+    let f = quote_builder_fields(input.data).unwrap();
     let q = quote! {
         use std::error::Error;
         pub struct #builder_name {
@@ -60,7 +60,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     q.into()
 }
 
-fn fields(data: Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+fn quote_builder_fields(data: Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
     if let Data::Struct(ds) = data {
         if let Fields::Named(fnamed) = ds.fields {
             let xx = fnamed.named.iter().map(|x| {
