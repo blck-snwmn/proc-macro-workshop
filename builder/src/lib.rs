@@ -1,17 +1,16 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use std::error::Error;
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 #[proc_macro_derive(Builder)]
 pub fn derive(input: TokenStream) -> TokenStream {
-    let _ = input;
-
+    let input = parse_macro_input!(input as DeriveInput);
+    let f = fields(input.data).unwrap();
     let q = quote! {
         use std::error::Error;
         pub struct CommandBuilder {
-            executable: Option<String>,
-            args: Option<Vec<String>>,
-            env: Option<Vec<String>>,
-            current_dir: Option<String>,
+            #f
         }
         impl CommandBuilder {
             pub fn executable(&mut self, executable: String) -> &mut Self {
@@ -57,4 +56,26 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     };
     q.into()
+}
+
+fn fields(data: Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+    if let Data::Struct(ds) = data {
+        if let Fields::Named(fnamed) = ds.fields {
+            let xx = fnamed.named.iter().map(|x| {
+                let name = &x.ident;
+                let ty = &x.ty;
+                // このような記載はできないので、注意
+                // quote! {
+                //     #x.ident: std::option::Option<#x.ty>
+                // }
+                quote! {
+                    #name: std::option::Option<#ty>
+                }
+            });
+            return Ok(quote! {
+                #(#xx,)*
+            });
+        }
+    }
+    Err("a")?
 }
