@@ -17,10 +17,10 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
         impl #builder_name {
             #setter
-            pub fn build(&mut self) -> Result<Command, Box<dyn Error>> {
+            pub fn build(&mut self) -> Result<#input_indent, Box<dyn Error>> {
                 match (self.executable.take(), self.args.take(), self.env.take(), self.current_dir.take()){
                     (Some(ex),Some(a),Some(ev),Some(cd)) =>Ok(
-                        Command{
+                        #input_indent{
                             executable: ex,
                             args: a,
                             env: ev,
@@ -32,9 +32,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl Command {
-            pub fn builder() -> CommandBuilder {
-                CommandBuilder {
+        impl #input_indent {
+            pub fn builder() -> #builder_name {
+                #builder_name {
                     executable: None,
                     args: None,
                     env: None,
