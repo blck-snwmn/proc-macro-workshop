@@ -11,6 +11,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let f = quote_builder_fields(&input.data).unwrap();
     let setter = quote_setter(&input.data).unwrap();
     let init_builder = quote_init_for_builder_fields(&input.data).unwrap();
+    let build_fields = quote_build_fields(&input.data).unwrap();
     let q = quote! {
         use std::error::Error;
         pub struct #builder_name {
@@ -19,17 +20,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #builder_name {
             #setter
             pub fn build(&mut self) -> Result<#input_indent, Box<dyn Error>> {
-                match (self.executable.take(), self.args.take(), self.env.take(), self.current_dir.take()){
-                    (Some(ex),Some(a),Some(ev),Some(cd)) =>Ok(
-                        #input_indent{
-                            executable: ex,
-                            args: a,
-                            env: ev,
-                            current_dir: cd,
-                        }
-                    ),
-                    _ =>  Err("a")?, // 手抜き
-                }
+                std::result::Result::Ok(#input_indent {
+                    #build_fields
+                })
             }
         }
 
@@ -101,6 +94,23 @@ fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream
                 let name = &x.ident;
                 quote! {
                     #name: std::option::Option::None
+                }
+            });
+            return quote! {
+                #(#xx,)*
+            };
+        });
+    }
+    Err("a")?
+}
+
+fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+    if let Data::Struct(ds) = data {
+        return fields(&ds.fields).map(|fnamed| {
+            let xx = fnamed.named.iter().map(|x| {
+                let name = &x.ident;
+                quote! {
+                    #name: self.#name.take().unwrap()
                 }
             });
             return quote! {
