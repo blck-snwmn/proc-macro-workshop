@@ -53,20 +53,15 @@ fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>>
             let xx = fnamed.named.iter().map(|x| {
                 let name = &x.ident;
                 let ty = &x.ty;
-                if contain_option_type(&x.ty) {
-                    let inty = extract_option_generics_type(&x.ty).unwrap();
-                    quote! {
-                        pub fn #name(&mut self, #name: #inty) ->&mut Self{
-                            self.#name =  std::option::Option::Some(#name);
-                            self
-                        }
-                    }
+                let args_type = if contain_option_type(&x.ty) {
+                    extract_option_generics_type(&x.ty).unwrap()
                 } else {
-                    quote! {
-                        pub fn #name(&mut self, #name: #ty) ->&mut Self{
-                            self.#name =  std::option::Option::Some(#name);
-                            self
-                        }
+                    ty
+                };
+                quote! {
+                    pub fn #name(&mut self, #name: #args_type) ->&mut Self{
+                        self.#name =  std::option::Option::Some(#name);
+                        self
                     }
                 }
             });
