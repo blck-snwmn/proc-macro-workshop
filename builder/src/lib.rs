@@ -144,11 +144,15 @@ fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn E
     Err("a")?
 }
 
-fn contain_option_type(ty: &Type) -> bool {
+fn contain_type_by(ty: &Type, ident: String) -> bool {
     if let Type::Path(p) = ty {
-        return p.path.segments.iter().any(|ps| ps.ident == "Option");
+        return p.path.segments.iter().any(|ps| ps.ident == ident);
     }
     false
+}
+
+fn contain_option_type(ty: &Type) -> bool {
+    contain_type_by(ty, "Option".to_owned())
 }
 
 fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type, Box<dyn Error>> {
