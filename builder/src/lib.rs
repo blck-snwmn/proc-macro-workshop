@@ -10,14 +10,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let input_indent = input.ident;
     let builder_name = format_ident!("{}Builder", input_indent);
-    let f = quote_builder_fields(&input.data).unwrap();
+    let builder_fields = quote_builder_fields(&input.data).unwrap();
     let setters = quote_setter(&input.data).unwrap();
     let init_builder = quote_init_for_builder_fields(&input.data).unwrap();
     let build_fields = quote_build_fields(&input.data).unwrap();
     let q = quote! {
         use std::error::Error;
         pub struct #builder_name {
-            #f
+            #builder_fields
         }
         impl #builder_name {
             #setters
