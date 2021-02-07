@@ -156,9 +156,9 @@ fn contain_option_type(ty: &Type) -> bool {
     false
 }
 
-fn extract_option_generics_type(ty: &Type) -> Result<&Type, Box<dyn Error>> {
+fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type, Box<dyn Error>> {
     if let Type::Path(p) = ty {
-        let arg = p.path.segments.iter().find(|ps| ps.ident == "Option");
+        let arg = p.path.segments.iter().find(|ps| ps.ident == ident);
         let ex = arg
             .map(|x| {
                 if let PathArguments::AngleBracketed(garg) = &x.arguments {
@@ -174,4 +174,8 @@ fn extract_option_generics_type(ty: &Type) -> Result<&Type, Box<dyn Error>> {
         }
     }
     Err("a")?
+}
+
+fn extract_option_generics_type(ty: &Type) -> Result<&Type, Box<dyn Error>> {
+    extract_generics_type(ty, "Option".to_owned())
 }
