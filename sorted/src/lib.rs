@@ -12,9 +12,10 @@ pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
     match &input {
         Item::Enum(_) => {}
         _ => {
+            // TODO この部分は関数として切り出すこと
             return Error::new_spanned(quote! {"#[sorted]"}, "expected enum or match expression")
                 .to_compile_error()
-                .into()
+                .into();
         }
     }
 
