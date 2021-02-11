@@ -224,34 +224,29 @@ fn extract_vector_generics_type(ty: &Type) -> Result<&Type> {
     extract_generics_type(ty, "Vec".to_owned())
 }
 
-fn extract_meta_by_atribute(field: &Field) -> Option<String> {
+fn extract_meta(field: &Field) -> Option<Meta> {
+    field.attrs.iter().find_map(|atr| {
+        let r = atr.parse_meta();
+
+        match r {
+            Ok(r) => Some(r),
+            _ => None,
+        }
+    })
+}
 
 fn extract_each_by_mae_name_value(field: &Field) -> Option<String> {
-    field
-        .attrs
-        .iter()
-        .find_map(|atr| {
-            let r = atr.parse_meta();
-
-            match r {
-                Ok(r) => Some(r),
+    extract_meta(field).and_then(|meta| match meta {
+        Meta::List(mlist) => mlist.nested.iter().find_map(|x| match x {
+            syn::NestedMeta::Meta(m) => match m {
+                Meta::NameValue(mnv) => match mnv.lit {
+                    Lit::Str(ref s) => Some(s.value()),
+                    _ => None,
+                },
                 _ => None,
-            }
-        })
-        .and_then(|meta| match meta {
-            Meta::List(mlist) => mlist.nested.iter().find_map(|x| match x {
-                syn::NestedMeta::Meta(m) => {
-                    if !m.path().is_ident("each") {}
-                    match m {
-                        Meta::NameValue(mnv) => match mnv.lit {
-                            Lit::Str(ref s) => Some(s.value()),
-                            _ => None,
-                        },
-                        _ => None,
-                    }
-                }
-                syn::NestedMeta::Lit(_) => None,
-            }),
-            _ => None,
-        })
+            },
+            syn::NestedMeta::Lit(_) => None,
+        }),
+        _ => None,
+    })
 }
