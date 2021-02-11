@@ -1,16 +1,18 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, Data, DeriveInput, Error, Field, Fields, FieldsNamed, GenericArgument, Lit,
-    Meta, PathArguments, Result, Type,
-};
+use std::result::Result;
+use syn::{Data, DeriveInput, Error, Field, Fields, FieldsNamed, GenericArgument, Lit, Meta, PathArguments, Type, parse_macro_input};
 
 #[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let input_indent = input.ident;
     let builder_name = format_ident!("{}Builder", input_indent);
-    let builder_fields = quote_builder_fields(&input.data).unwrap();
+    let builder_fields = quote_builder_fields(&input.data);
+    if builder_fields.is_err() {
+        return builder_fields.err().unwrap().into();
+    }
+    let builder_fields = builder_fields.unwrap();
     let setters = quote_setter(&input.data).unwrap();
     let init_builder = quote_init_for_builder_fields(&input.data).unwrap();
     let build_fields = quote_build_fields(&input.data).unwrap();
@@ -40,14 +42,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     q.into()
 }
 
-fn fields(fields: &Fields) -> Result<&FieldsNamed> {
+fn fields(fields: &Fields) -> Result<&FieldsNamed, proc_macro2::TokenStream> {
     if let Fields::Named(fnamed) = fields {
         return Ok(&fnamed);
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
-fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream> {
+fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -83,50 +85,86 @@ fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream> {
             };
         });
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
-fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
+fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream,proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
-        return fields(&ds.fields).map(|fnamed| {
+        return fields(&ds.fields).and_then(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
-                let ty = &x.ty;
+                // let ty = &x.ty;
 
-                let meta = extract_each_by_mae_name_value(x);
-                let inner_type = extract_vector_generics_type(ty);
-                if let (Some(m), Ok(t)) = (meta, inner_type) {
-                    let filed_name = format_ident!("{}", m);
-                    return quote! {
-                        #filed_name: Vec<#t>
-                    };
-                }
-
-                let name = &x.ident;
-                // このような記載はできないので、注意
-                // quote! {
-                //     #x.ident: std::option::Option<#x.ty>
+                // let meta = extract_each_by_mae_name_value(x);
+                // let inner_type = extract_vector_generics_type(ty);
+                // if let (Some(m), Ok(t)) = (meta, inner_type) {
+                //     if !contain_each_by_mae_name_value(x).unwrap() {
+                //         return Err(Error::new(x.span(), "test").to_compile_error());
+                //     }
+                //     let filed_name = format_ident!("{}", m);
+                //     return Ok(quote! {
+                //         #filed_name: Vec<#t>
+                //     });
                 // }
-                if contain_option_type(&x.ty) {
-                    // builderのフィールドはすべてOption型にする
-                    // 対象のフィールドがOptionの場合、builderのフィールドをOptionで包む必要がないので、そのまま指定
-                    quote! {
-                        #name: #ty
-                    }
-                } else {
-                    quote! {
-                        #name: std::option::Option<#ty>
-                    }
-                }
+
+                // let name = &x.ident;
+                // // このような記載はできないので、注意
+                // // quote! {
+                // //     #x.ident: std::option::Option<#x.ty>
+                // // }
+                // if contain_option_type(&x.ty) {
+                //     // builderのフィールドはすべてOption型にする
+                //     // 対象のフィールドがOptionの場合、builderのフィールドをOptionで包む必要がないので、そのまま指定
+                //     Ok(quote! {
+                //         #name: #ty
+                //     })
+                // } else {
+                //     Ok(quote! {
+                //         #name: std::option::Option<#ty>
+                //     })
+                // }
+                define_fileds(x)
             });
-            return quote! {
-                #(#xx,)*
-            };
+            let xx = xx.fold(
+                Ok(Vec::new()),
+                 | acc: std::result::Result<
+                    Vec<proc_macro2::TokenStream>,
+                    proc_macro2::TokenStream,
+                >,
+                      x: std::result::Result<
+                    proc_macro2::TokenStream,
+                    proc_macro2::TokenStream,
+                >| {
+                    // if acc.is_err() {
+                    //     return acc;
+                    // }
+                    // // if x.is_err() {
+                    // //     return Err(x.err().unwrap());
+                    // // }
+                    x.and_then(|xx|{
+                        acc.map(|mut v|{
+                            v.push(xx);
+                            v
+                        })
+                    })
+                    
+                    // let mut z = acc.unwrap();
+                    // z.push(x.ok().unwrap());
+                    // Ok(z)
+                },
+            );
+           return xx.map(|r|quote! {
+                #(#r,)*
+            })
+            // let r = xx.ok().unwrap();
+            // return Ok(quote! {
+            //     #(#r,)*
+            // });
         });
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
-fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
+fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -148,10 +186,10 @@ fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream
             };
         });
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
-fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
+fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -182,7 +220,7 @@ fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
             };
         });
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
 fn contain_type_by(ty: &Type, ident: String) -> bool {
@@ -196,7 +234,7 @@ fn contain_option_type(ty: &Type) -> bool {
     contain_type_by(ty, "Option".to_owned())
 }
 
-fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type> {
+fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type, proc_macro2::TokenStream> {
     if let Type::Path(p) = ty {
         let arg = p.path.segments.iter().find(|ps| ps.ident == ident);
         let ex = arg
@@ -213,14 +251,14 @@ fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type> {
             return Ok(t);
         }
     }
-    Err(Error::new_spanned(quote! {"err"}, "a"))
+    Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error())
 }
 
-fn extract_option_generics_type(ty: &Type) -> Result<&Type> {
+fn extract_option_generics_type(ty: &Type) -> Result<&Type, proc_macro2::TokenStream> {
     extract_generics_type(ty, "Option".to_owned())
 }
 
-fn extract_vector_generics_type(ty: &Type) -> Result<&Type> {
+fn extract_vector_generics_type(ty: &Type) -> Result<&Type, proc_macro2::TokenStream> {
     extract_generics_type(ty, "Vec".to_owned())
 }
 
@@ -249,4 +287,49 @@ fn extract_each_by_mae_name_value(field: &Field) -> Option<String> {
         }),
         _ => None,
     })
+}
+
+fn define_fileds(field: &Field) -> Result<proc_macro2::TokenStream, proc_macro2::TokenStream>{
+    match field.attrs.first(){
+        Some(atr) => {
+            let x = atr.parse_meta().map_err(|e|e.to_compile_error()).and_then(|meta| match meta {
+                Meta::List(mlist) => {
+                    let nested_meta = mlist.nested.first();
+                    match nested_meta {
+                        Some( syn::NestedMeta::Meta(syn::Meta::NameValue(meta_name_value))) if meta_name_value.path.is_ident("each") =>{
+                            match meta_name_value.lit{
+                            Lit::Str(ref s) => {
+                                let filed_name = format_ident!("{}", s.value()); 
+                                let inner_type = extract_vector_generics_type(&field.ty).unwrap();
+                                Ok(quote! {
+                                    #filed_name: Vec<#inner_type>
+                                })
+                            },
+                            _ => Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error()),
+                        }},
+                        _ => {
+                            Err(Error::new_spanned(mlist, "expected `builder(each = \"...\")`").into_compile_error())
+                        },
+                    }
+                },
+                _ => Err(Error::new_spanned(quote! {"err"}, "a").into_compile_error()),
+            });
+            x
+        },
+        None => {
+            let name = &field.ident;
+            let ty = &field.ty;
+            if contain_option_type(&ty) {
+                // builderのフィールドはすべてOption型にする
+                // 対象のフィールドがOptionの場合、builderのフィールドをOptionで包む必要がないので、そのまま指定
+                Ok(quote! {
+                    #name: #ty
+                })
+            } else {
+                Ok(quote! {
+                    #name: std::option::Option<#ty>
+                })
+            }   
+        },
+    }
 }
