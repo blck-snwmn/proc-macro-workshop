@@ -1,9 +1,8 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use std::error::Error;
 use syn::{
-    parse_macro_input, Data, DeriveInput, Field, Fields, FieldsNamed, GenericArgument, Lit, Meta,
-    PathArguments, Type,
+    parse_macro_input, Data, DeriveInput, Error, Field, Fields, FieldsNamed, GenericArgument, Lit,
+    Meta, PathArguments, Result, Type,
 };
 
 #[proc_macro_derive(Builder, attributes(builder))]
@@ -41,14 +40,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     q.into()
 }
 
-fn fields(fields: &Fields) -> Result<&FieldsNamed, Box<dyn Error>> {
+fn fields(fields: &Fields) -> Result<&FieldsNamed> {
     if let Fields::Named(fnamed) = fields {
         return Ok(&fnamed);
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
-fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -84,10 +83,10 @@ fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>>
             };
         });
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
-fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -124,10 +123,10 @@ fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn
             };
         });
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
-fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -149,10 +148,10 @@ fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream
             };
         });
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
-fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn Error>> {
+fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
@@ -183,7 +182,7 @@ fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream, Box<dyn E
             };
         });
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
 fn contain_type_by(ty: &Type, ident: String) -> bool {
@@ -197,7 +196,7 @@ fn contain_option_type(ty: &Type) -> bool {
     contain_type_by(ty, "Option".to_owned())
 }
 
-fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type, Box<dyn Error>> {
+fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type> {
     if let Type::Path(p) = ty {
         let arg = p.path.segments.iter().find(|ps| ps.ident == ident);
         let ex = arg
@@ -214,14 +213,14 @@ fn extract_generics_type(ty: &Type, ident: String) -> Result<&Type, Box<dyn Erro
             return Ok(t);
         }
     }
-    Err("a")?
+    Err(Error::new_spanned(quote! {"err"}, "a"))
 }
 
-fn extract_option_generics_type(ty: &Type) -> Result<&Type, Box<dyn Error>> {
+fn extract_option_generics_type(ty: &Type) -> Result<&Type> {
     extract_generics_type(ty, "Option".to_owned())
 }
 
-fn extract_vector_generics_type(ty: &Type) -> Result<&Type, Box<dyn Error>> {
+fn extract_vector_generics_type(ty: &Type) -> Result<&Type> {
     extract_generics_type(ty, "Vec".to_owned())
 }
 
@@ -239,13 +238,16 @@ fn extract_meta_by_atribute(field: &Field) -> Option<String> {
         })
         .and_then(|meta| match meta {
             Meta::List(mlist) => mlist.nested.iter().find_map(|x| match x {
-                syn::NestedMeta::Meta(m) => match m {
-                    Meta::NameValue(mnv) => match mnv.lit {
-                        Lit::Str(ref s) => Some(s.value()),
+                syn::NestedMeta::Meta(m) => {
+                    if !m.path().is_ident("each") {}
+                    match m {
+                        Meta::NameValue(mnv) => match mnv.lit {
+                            Lit::Str(ref s) => Some(s.value()),
+                            _ => None,
+                        },
                         _ => None,
-                    },
-                    _ => None,
-                },
+                    }
+                }
                 syn::NestedMeta::Lit(_) => None,
             }),
             _ => None,
