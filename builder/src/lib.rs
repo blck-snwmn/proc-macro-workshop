@@ -24,7 +24,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #builder_name {
             #setters
 
-            pub fn build(&mut self) -> Result<#input_indent, Box<dyn Error>> {
+            pub fn build(&mut self) -> std::result::Result<#input_indent,  std::boxed::Box<dyn Error>> {
                 std::result::Result::Ok(#input_indent {
                     #build_fields
                 })
