@@ -54,7 +54,7 @@ fn quote_setter(data: &Data) -> Result<proc_macro2::TokenStream> {
                 let name = &x.ident;
                 let ty = &x.ty;
 
-                let meta = extract_meta_by_atribute(x);
+                let meta = extract_each_by_mae_name_value(x);
                 let inner_type = extract_vector_generics_type(ty);
                 if let (Some(m), Ok(t)) = (meta, inner_type) {
                     let filed_name = format_ident!("{}", m);
@@ -92,7 +92,7 @@ fn quote_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
             let xx = fnamed.named.iter().map(|x| {
                 let ty = &x.ty;
 
-                let meta = extract_meta_by_atribute(x);
+                let meta = extract_each_by_mae_name_value(x);
                 let inner_type = extract_vector_generics_type(ty);
                 if let (Some(m), Ok(t)) = (meta, inner_type) {
                     let filed_name = format_ident!("{}", m);
@@ -130,7 +130,7 @@ fn quote_init_for_builder_fields(data: &Data) -> Result<proc_macro2::TokenStream
     if let Data::Struct(ds) = data {
         return fields(&ds.fields).map(|fnamed| {
             let xx = fnamed.named.iter().map(|x| {
-                let meta = extract_meta_by_atribute(x);
+                let meta = extract_each_by_mae_name_value(x);
                 if let Some(m) = meta {
                     let filed_name = format_ident!("{}", m);
                     return quote! {
@@ -157,7 +157,7 @@ fn quote_build_fields(data: &Data) -> Result<proc_macro2::TokenStream> {
             let xx = fnamed.named.iter().map(|x| {
                 let name = &x.ident;
 
-                let meta = extract_meta_by_atribute(x);
+                let meta = extract_each_by_mae_name_value(x);
                 if let Some(m) = meta {
                     let filed_name = format_ident!("{}", m);
                     return quote! {
@@ -225,6 +225,8 @@ fn extract_vector_generics_type(ty: &Type) -> Result<&Type> {
 }
 
 fn extract_meta_by_atribute(field: &Field) -> Option<String> {
+
+fn extract_each_by_mae_name_value(field: &Field) -> Option<String> {
     field
         .attrs
         .iter()
