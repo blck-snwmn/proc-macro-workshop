@@ -5,6 +5,8 @@ use syn::{parse_macro_input, spanned::Spanned, AttributeArgs, Error, Item, ItemE
 
 #[proc_macro_attribute]
 pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
+    let mut output = input.clone();
+
     let input = parse_macro_input!(input as Item);
     let args = parse_macro_input!(args as AttributeArgs);
 
@@ -12,24 +14,18 @@ pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
 
     match &input {
         Item::Enum(item) => {
-            let sorted = sorted_variants(item);
-            if sorted.is_err() {
-                return sorted.err().unwrap().into();
+            if let Err(e) = sorted_variants(item) {
+                output.extend(TokenStream::from(e));
             }
         }
         _ => {
-            // TODO この部分は関数として切り出すこと
-            return Error::new_spanned(quote! {"#[sorted]"}, "expected enum or match expression")
-                .to_compile_error()
-                .into();
+            let e = Error::new_spanned(quote! {"#[sorted]"}, "expected enum or match expression")
+                .to_compile_error();
+            output.extend(TokenStream::from(e));
         }
     }
 
-    let q = quote! {
-        #input
-    };
-
-    q.into()
+    output
 }
 // ソートされているかチェック
 fn sorted_variants(item: &ItemEnum) -> Result<(), TokenStream2> {
