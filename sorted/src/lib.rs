@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{parse_macro_input, spanned::Spanned, AttributeArgs, Error, Item, ItemEnum, Variant};
+use syn::{parse_macro_input, spanned::Spanned, AttributeArgs, Error, Item, ItemEnum};
 
 #[proc_macro_attribute]
 pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -32,27 +32,22 @@ pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
     q.into()
 }
 // ソートされているかチェック
-fn sorted_variants(item: &ItemEnum) -> Result<Option<&Variant>, TokenStream2> {
-    item.variants.iter().fold(
-        Ok(None),
-        |acc_before: Result<Option<&Variant>, TokenStream2>, now| {
-            acc_before.and_then(|x| match x {
-                Some(before) => {
-                    let before_indent = before.ident.to_string();
-                    let now_indent = now.ident.to_string();
-                    if before_indent <= now_indent {
-                        Ok(Some(now))
-                    } else {
-                        Err(Error::new(
-                            now.span(),
-                            // TODO ここは変数から取得する
-                            format!("SomethingFailed should sort before ThatFailed"),
-                        )
-                        .into_compile_error())
-                    }
-                }
-                None => Ok(Some(now)),
-            })
-        },
-    )
+fn sorted_variants(item: &ItemEnum) -> Result<(), TokenStream2> {
+    let origin: Vec<&Ident> = item.variants.iter().map(|v| &v.ident).collect();
+
+    let mut sorted = origin.clone();
+    sorted.sort();
+
+    origin.iter().zip(sorted.iter()).try_fold((), |_, (o, s)| {
+        if o.to_string() == s.to_string() {
+            Ok(())
+        } else {
+            Err(Error::new(
+                s.span(),
+                // TODO ここは変数から取得する
+                format!("{} should sort before {}", s.to_string(), o.to_string()),
+            )
+            .into_compile_error())
+        }
+    })
 }
