@@ -3,7 +3,7 @@ use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{quote, ToTokens};
 use syn::{
     parse_macro_input, spanned::Spanned, visit_mut::VisitMut, AttributeArgs, Error, ExprMatch,
-    Item, ItemEnum,
+    Item, ItemEnum, Path,
 };
 
 #[proc_macro_attribute]
@@ -63,18 +63,12 @@ impl syn::visit_mut::VisitMut for Visitor {
         // remove sorted attribute
         em.attrs.retain(|a| !a.path.is_ident("sorted"));
 
-        em.arms.iter().for_each(|x| match &x.pat {
-            syn::Pat::TupleStruct(pts) => {
-                println!("{}", pts.path.to_token_stream().to_string())
-            }
-            _ => println!(),
-        });
-
         let original: Vec<&syn::Path> = em
             .arms
             .iter()
             .filter_map(|a| match &a.pat {
                 syn::Pat::TupleStruct(pts) => Some(&pts.path),
+                syn::Pat::Path(pp) => Some(&pp.path),
                 _ => {
                     println!("no exptected");
                     None
@@ -92,17 +86,15 @@ impl syn::visit_mut::VisitMut for Visitor {
             .iter()
             .zip(sorted.iter())
             .try_fold((), |_, (o, s)| {
-                if o.to_token_stream().to_string() == s.to_token_stream().to_string() {
+                let oo = show_path_str(o);
+                let ss = show_path_str(s);
+                if oo == ss {
                     Ok(())
                 } else {
-                    Err(Error::new(
-                        s.span(),
+                    Err(Error::new_spanned(
+                        s,
                         // TODO ここは変数から取得する
-                        format!(
-                            "{} should sort before {}",
-                            s.to_token_stream().to_string(),
-                            o.to_token_stream().to_string()
-                        ),
+                        format!("{} should sort before {}", ss, oo),
                     )
                     .into_compile_error())
                 }
@@ -130,4 +122,18 @@ pub fn check(_: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     output
+}
+
+// Pathの文字列形式を返す
+// `path.to_token_stream().to_string()`で表示すると以下のように、コロンと文字の間にスペースが入るため、自作
+//      in: foo::Bar -> out: foo :: Bar
+fn show_path_str(p: &Path) -> String {
+    let leading_colon = p.leading_colon.map_or("", |_| "::").to_string();
+    let x = p
+        .segments
+        .iter()
+        .map(|x| x.to_token_stream().to_string())
+        .collect::<Vec<String>>()
+        .join("::");
+    leading_colon + &x
 }
