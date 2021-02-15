@@ -63,44 +63,59 @@ impl syn::visit_mut::VisitMut for Visitor {
         // remove sorted attribute
         em.attrs.retain(|a| !a.path.is_ident("sorted"));
 
-        let original: Vec<&syn::Path> = em
+        let original: Result<Vec<&syn::Path>, proc_macro2::Span> = em
             .arms
             .iter()
-            .filter_map(|a| match &a.pat {
-                syn::Pat::TupleStruct(pts) => Some(&pts.path),
-                syn::Pat::Path(pp) => Some(&pp.path),
-                _ => {
-                    println!("no exptected");
-                    None
-                }
+            .map(|a| match &a.pat {
+                syn::Pat::TupleStruct(pts) => Ok(&pts.path),
+                syn::Pat::Path(pp) => Ok(&pp.path),
+                _p => Err(_p.span()),
             })
-            .collect();
-        let mut sorted = original.clone();
-        sorted.sort_by(|l, r| {
-            let l = l.to_token_stream().to_string();
-            let r = r.to_token_stream().to_string();
-            l.cmp(&r)
-        });
+            .try_fold(Vec::new(), |mut acc, x| {
+                x.and_then(|xx| {
+                    acc.push(xx);
+                    Ok(acc)
+                })
+            });
 
-        if let Err(ts) = original
-            .iter()
-            .zip(sorted.iter())
-            .try_fold((), |_, (o, s)| {
-                let oo = show_path_str(o);
-                let ss = show_path_str(s);
-                if oo == ss {
-                    Ok(())
-                } else {
-                    Err(Error::new_spanned(
-                        s,
-                        // TODO ここは変数から取得する
-                        format!("{} should sort before {}", ss, oo),
-                    )
-                    .into_compile_error())
-                }
-            })
-        {
-            self.err = Some(ts);
+        let r = match original {
+            Ok(original) => {
+                let mut sorted = original.clone();
+                sorted.sort_by(|l, r| {
+                    let l = l.to_token_stream().to_string();
+                    let r = r.to_token_stream().to_string();
+                    l.cmp(&r)
+                });
+
+                original
+                    .iter()
+                    .zip(sorted.iter())
+                    .try_fold((), |_, (o, s)| {
+                        let oo = show_path_str(o);
+                        let ss = show_path_str(s);
+                        if oo == ss {
+                            Ok(())
+                        } else {
+                            Err(Error::new_spanned(
+                                s,
+                                // TODO ここは変数から取得する
+                                format!("{} should sort before {}", ss, oo),
+                            )
+                            .into_compile_error())
+                        }
+                    })
+            }
+            Err(s) => {
+                Err(Error::new(
+                    s,
+                    // TODO ここは変数から取得する
+                    format!("unsupported by #[sorted]"),
+                )
+                .into_compile_error())
+            }
+        };
+        if let Err(e) = r {
+            self.err = Some(e);
         }
 
         syn::visit_mut::visit_expr_match_mut(self, em);
