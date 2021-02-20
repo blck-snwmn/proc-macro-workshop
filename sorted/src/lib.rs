@@ -88,6 +88,7 @@ impl syn::visit_mut::VisitMut for Visitor {
             // syn::Pat::Wild(w) => Ok(&w.),
             _p => Err(_p.span()),
         });
+        let xxx = x.iter().map(|p| matches!(p, syn::Pat::TupleStruct(_)));
         let original: Result<Vec<&syn::Pat>, proc_macro2::Span> =
             original.try_fold(Vec::new(), |mut acc, x| {
                 x.and_then(|xx| {
@@ -114,26 +115,17 @@ impl syn::visit_mut::VisitMut for Visitor {
                         if oo == ss {
                             Ok(())
                         } else {
-                            let e = match s {
-                                syn::Pat::TupleStruct(pts) => Some(Error::new_spanned(
-                                    &pts.path,
-                                    // TODO ここは変数から取得する
-                                    format!("{} should sort before {}", ss, oo),
-                                )),
-                                syn::Pat::Path(pp) => Some(Error::new_spanned(
-                                    &pp.path,
-                                    // TODO ここは変数から取得する
-                                    format!("{} should sort before {}", ss, oo),
-                                )),
-                                syn::Pat::Ident(i) => Some(Error::new_spanned(
-                                    i,
-                                    // TODO ここは変数から取得する
-                                    format!("{} should sort before {}", ss, oo),
-                                )),
-                                _ => None,
-                            };
-                            Err(e.unwrap().into_compile_error())
+                            Err((s, format!("{} should sort before {}", ss, oo)))
                         }
+                    })
+                    .map_err(|(p, s)| {
+                        let e = match p {
+                            syn::Pat::TupleStruct(pts) => Some(Error::new_spanned(&pts.path, s)),
+                            syn::Pat::Path(pp) => Some(Error::new_spanned(&pp.path, s)),
+                            syn::Pat::Ident(i) => Some(Error::new_spanned(i, s)),
+                            _ => None,
+                        };
+                        e.unwrap().into_compile_error()
                     })
             }
             Err(s) => {
