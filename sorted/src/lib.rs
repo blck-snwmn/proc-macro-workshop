@@ -63,17 +63,35 @@ impl syn::visit_mut::VisitMut for Visitor {
         // remove sorted attribute
         em.attrs.retain(|a| !a.path.is_ident("sorted"));
 
-        let original: Result<Vec<&syn::Path>, proc_macro2::Span> = em
-            .arms
-            .iter()
-            .map(|a| match &a.pat {
-                syn::Pat::TupleStruct(pts) => Ok(&pts.path),
-                syn::Pat::Path(pp) => Ok(&pp.path),
-                _p => Err(_p.span()),
-            })
-            .try_fold(Vec::new(), |mut acc, x| {
+        let mut x: Vec<&syn::Pat> = em.arms.iter().map(|a| &a.pat).collect();
+        if let Some((last, elems)) = x.split_last() {
+            let wild = elems.iter().find_map(|pat| match pat {
+                syn::Pat::Wild(w) => Some(w),
+                _ => None,
+            });
+            match wild {
+                Some(w) => {
+                    // 最後以外にwildがあるので、エラー
+                    self.err = Some(w.to_token_stream());
+                    return syn::visit_mut::visit_expr_match_mut(self, em);
+                }
+                None => match last {
+                    syn::Pat::Wild(_) => x = elems.into(),
+                    _ => {}
+                },
+            }
+        }
+        let mut original = x.iter().map(|p| match p {
+            syn::Pat::TupleStruct(_) => Ok(p),
+            syn::Pat::Path(_) => Ok(p),
+            syn::Pat::Ident(_) => Ok(p),
+            // syn::Pat::Wild(w) => Ok(&w.),
+            _p => Err(_p.span()),
+        });
+        let original: Result<Vec<&syn::Pat>, proc_macro2::Span> =
+            original.try_fold(Vec::new(), |mut acc, x| {
                 x.and_then(|xx| {
-                    acc.push(xx);
+                    acc.push(*xx);
                     Ok(acc)
                 })
             });
@@ -91,17 +109,30 @@ impl syn::visit_mut::VisitMut for Visitor {
                     .iter()
                     .zip(sorted.iter())
                     .try_fold((), |_, (o, s)| {
-                        let oo = show_path_str(o);
-                        let ss = show_path_str(s);
+                        let oo = show_str(o);
+                        let ss = show_str(s);
                         if oo == ss {
                             Ok(())
                         } else {
-                            Err(Error::new_spanned(
-                                s,
-                                // TODO ここは変数から取得する
-                                format!("{} should sort before {}", ss, oo),
-                            )
-                            .into_compile_error())
+                            let e = match s {
+                                syn::Pat::TupleStruct(pts) => Some(Error::new_spanned(
+                                    &pts.path,
+                                    // TODO ここは変数から取得する
+                                    format!("{} should sort before {}", ss, oo),
+                                )),
+                                syn::Pat::Path(pp) => Some(Error::new_spanned(
+                                    &pp.path,
+                                    // TODO ここは変数から取得する
+                                    format!("{} should sort before {}", ss, oo),
+                                )),
+                                syn::Pat::Ident(i) => Some(Error::new_spanned(
+                                    i,
+                                    // TODO ここは変数から取得する
+                                    format!("{} should sort before {}", ss, oo),
+                                )),
+                                _ => None,
+                            };
+                            Err(e.unwrap().into_compile_error())
                         }
                     })
             }
@@ -137,6 +168,15 @@ pub fn check(_: TokenStream, input: TokenStream) -> TokenStream {
     }
 
     output
+}
+
+fn show_str(p: &syn::Pat) -> String {
+    match p {
+        syn::Pat::TupleStruct(pts) => show_path_str(&pts.path),
+        syn::Pat::Path(pp) => show_path_str(&pp.path),
+        syn::Pat::Ident(i) => i.ident.to_string(),
+        _ => String::new(),
+    }
 }
 
 // Pathの文字列形式を返す
