@@ -14,19 +14,25 @@ struct Seq {
 impl Parse for Seq {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let n_ident: Ident = input.parse()?;
+
         input.parse::<Token![in]>()?;
+
         let start: Literal = input.parse::<Literal>()?;
         let start = start
             .to_string()
             .parse::<u64>()
             .map_err(|e| syn::Error::new(start.span(), e.to_string()))?;
+
         input.parse::<Token![..]>()?;
+
         let end: Literal = input.parse()?;
         let end = end
             .to_string()
             .parse::<u64>()
             .map_err(|e| syn::Error::new(end.span(), e.to_string()))?;
+
         let stream = input.parse::<Group>()?.stream();
+
         Ok(Seq {
             n_indet: n_ident,
             start: start,
