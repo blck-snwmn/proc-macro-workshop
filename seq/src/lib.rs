@@ -1,7 +1,9 @@
+use std::iter::FromIterator;
+
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Ident, Literal, TokenStream as TokenStream2, TokenTree};
-use quote::quote;
-use syn::parse_macro_input;
+use quote::{format_ident, quote};
+use syn::{__private::str, parse_macro_input};
 use syn::{parse::Parse, Token};
 
 struct Seq {
@@ -32,7 +34,7 @@ impl Parse for Seq {
             .map_err(|e| syn::Error::new(end.span(), e.to_string()))?;
 
         let stream = input.parse::<Group>()?.stream();
-
+        // eprintln!("{:?}", stream);
         Ok(Seq {
             n_indet: n_ident,
             start: start,
@@ -41,35 +43,55 @@ impl Parse for Seq {
         })
     }
 }
-// struct Visitor;
-// impl syn::visit_mut::VisitMut for Visitor {
-//     fn visit_ident_mut(&mut self, i: &mut Ident) {
 
-//         syn::visit_mut::visit_ident_mut(self, i)
-//     }
-// }
-
-fn parse_tree(tt: TokenTree, old: &str, new: u64) -> TokenTree {
-    match tt {
-        TokenTree::Group(g) => Group::new(g.delimiter(), parse(g.stream(), old, new)).into(),
-        TokenTree::Ident(ref i) => {
-            let ident_str = i.to_string();
-            if ident_str == old {
-                TokenTree::from(Literal::u64_unsuffixed(new))
+fn parse_tree(
+    tt: TokenTree,
+    next: Option<TokenTree>,
+    peek: Option<TokenTree>,
+    old: &str,
+    new: u64,
+) -> (Option<TokenTree>, bool) {
+    match &tt {
+        TokenTree::Group(g) => (
+            Some(Group::new(g.delimiter(), parse(g.stream(), old, new)).into()),
+            false,
+        ),
+        TokenTree::Ident(i) => {
+            let with_sharp = matches!(next, Some(TokenTree::Punct(p)) if p.to_string() == "#");
+            let with_ident = matches!(&peek, Some(TokenTree::Ident(pi)) if pi.to_string() == old);
+            if with_sharp && with_ident {
+                let new_ident = format_ident!("{}{}", i.to_string(), new);
+                (Some(TokenTree::from(new_ident)), true)
+            } else if i.to_string() == old {
+                (Some(TokenTree::from(Literal::u64_unsuffixed(new))), false)
             } else {
-                tt
+                (Some(tt), false)
             }
         }
-        TokenTree::Punct(_) => tt,
-        TokenTree::Literal(_) => tt,
+        _ => (Some(tt), false),
     }
 }
 
 fn parse(stream: TokenStream2, old: &str, new: u64) -> TokenStream2 {
-    stream
-        .into_iter()
-        .map(|tt| parse_tree(tt, old, new))
-        .collect()
+    let mut stream = stream.into_iter().peekable();
+
+    let mut v = Vec::new();
+    while let Some(tt) = stream.next() {
+        // 次とその次の要素から判定するため
+        let mut c = stream.clone();
+        let next = c.next();
+        let peek = c.next();
+
+        if let (Some(tt), consumed) = parse_tree(tt, next, peek, old, new) {
+            v.push(tt);
+            if consumed {
+                // 消費したので、パースの対象から外す
+                stream.next();
+                stream.next();
+            }
+        }
+    }
+    TokenStream2::from_iter(v)
 }
 
 #[proc_macro]
@@ -86,6 +108,8 @@ pub fn seq(input: TokenStream) -> TokenStream {
         let stream = parse(stream.clone(), &n_indet.to_string(), i);
         out.extend(stream);
     }
+
+    // eprintln!("{}", out);
 
     out.into()
 }
